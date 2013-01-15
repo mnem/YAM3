@@ -9,6 +9,7 @@ public class SelectGridArea : MonoBehaviour {
 	public Vector3 cellCount;
 	public string layerName;
 	public bool onlyThisGameObject;
+	public bool onlySelectOnMouseDown;
 
 	public Vector3 cell {
 		get { return _cell; }
@@ -30,6 +31,7 @@ public class SelectGridArea : MonoBehaviour {
 		
 		_beingSelected = false;
 		onlyThisGameObject = true;
+		onlySelectOnMouseDown = true;
 		
 		layerName = "";
 	}
@@ -42,7 +44,7 @@ public class SelectGridArea : MonoBehaviour {
 	void Update () {
 		_beingSelected = false;
 		
-		if (Input.GetMouseButton(0)) {
+		if (!onlySelectOnMouseDown || Input.GetMouseButton(0)) {
 			CastAndSelectArea(Input.mousePosition);
 		}
 	}
@@ -97,11 +99,11 @@ public class SelectGridArea : MonoBehaviour {
 				cellOrigin.y + (cellSize.y / 2.0f),
 				cellOrigin.z + (cellSize.z / 2.0f));
 			
-			Color c = selector.renderer.material.color;
-			c.r = _cellPenetration.x;
-			c.g = _cellPenetration.y;
-			c.b = _cellPenetration.z;
-			selector.renderer.material.color = c;
+			//Color c = selector.renderer.material.color;
+			//c.r = _cellPenetration.x;
+			//c.g = _cellPenetration.y;
+			//c.b = _cellPenetration.z;
+			//selector.renderer.material.color = c;
 		}
 	}
 	
