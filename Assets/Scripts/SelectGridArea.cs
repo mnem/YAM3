@@ -3,6 +3,7 @@ using System.Collections;
 
 public class SelectGridArea : MonoBehaviour {
 	public GameObject selector;
+	public GameObject blop;
 	
 	public Vector3 gridOrigin;
 	public Vector3 cellSize;
@@ -46,6 +47,14 @@ public class SelectGridArea : MonoBehaviour {
 		
 		if (!onlySelectOnMouseDown || Input.GetMouseButton(0)) {
 			CastAndSelectArea(Input.mousePosition);
+		}
+		
+		if (Input.GetMouseButton(0)) {
+			Instantiate(selector, Input.mousePosition, Quaternion.identity);
+		}
+		
+		if (Input.GetMouseButtonDown(0)) {
+			Instantiate(blop, new Vector3(0,0,0), Quaternion.identity);
 		}
 	}
 	
@@ -94,10 +103,8 @@ public class SelectGridArea : MonoBehaviour {
 	void PositionSelectorAtCenterOfCell(Vector3 cellOrigin)
 	{
 		if (selector && selector.transform) {
-			selector.transform.position = new Vector3(
-				cellOrigin.x + (cellSize.x / 2.0f),
-				cellOrigin.y + (cellSize.y / 2.0f),
-				cellOrigin.z + (cellSize.z / 2.0f));
+			Vector3 center = cellOrigin + new Vector3(cellSize.x / 2.0f, cellSize.y / 2.0f, cellSize.z / 2.0f);
+			selector.transform.position = center;
 			
 			//Color c = selector.renderer.material.color;
 			//c.r = _cellPenetration.x;
