@@ -13,10 +13,11 @@ public class BoardState : MonoBehaviour {
 	void Start () {
 		initialiseCells();
 		
-		Vector3 current = new Vector3(-5, 0, -1);
+		Vector3 origin = new Vector3(-4f, -3, 0);
+		Vector3 current = new Vector3(origin.x, origin.y, origin.z);
 		float displayWidth = template.renderer.bounds.size.x;
 		float displayHeight = template.renderer.bounds.size.y;
-		const float xGap = 0.1f;
+		const float xGap = 1/8f;
 		
 		for(int y = 0; y < cellCount.y; ++y) {
 			for(int x = 0; x < cellCount.x; ++x) {
@@ -26,7 +27,7 @@ public class BoardState : MonoBehaviour {
 				current.x += displayWidth + xGap;
 			}
 			current.y += displayHeight;
-			current.x = -5;
+			current.x = origin.x;
 		}
 	}
 	
