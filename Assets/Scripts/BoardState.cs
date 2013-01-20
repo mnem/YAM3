@@ -14,15 +14,16 @@ public class BoardState : MonoBehaviour {
 		initialiseCells();
 		
 		Vector3 current = new Vector3(-5, 0, -1);
-		float displayWidth = 1;//template.renderer.bounds.extents.x;
-		float displayHeight = 1;//template.renderer.bounds.extents.y;
+		float displayWidth = template.renderer.bounds.size.x;
+		float displayHeight = template.renderer.bounds.size.y;
+		const float xGap = 0.1f;
 		
 		for(int y = 0; y < cellCount.y; ++y) {
 			for(int x = 0; x < cellCount.x; ++x) {
 				GameObject display = (GameObject)Instantiate(template, current, Quaternion.identity);
 				Cell cell = new Cell() {item = display};
 				cells[x,y] = cell;
-				current.x += displayWidth;
+				current.x += displayWidth + xGap;
 			}
 			current.y += displayHeight;
 			current.x = -5;
@@ -35,7 +36,10 @@ public class BoardState : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-	
+		Cell foo = cells[0,0];
+		if (foo.item.rigidbody.IsSleeping()) {
+			Debug.Log("Snore");
+		}
 	}
 	
 	private void initialiseCells() {
