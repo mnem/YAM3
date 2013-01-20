@@ -7,10 +7,11 @@ public class BoardState : MonoBehaviour {
 	public Vector2 cellCount;
 
 	private Cell[,] cells;
-	
+	private bool randomised;
 	
 	// Use this for initialization
 	void Start () {
+		randomised = false;
 		initialiseCells();
 		
 		Vector3 origin = new Vector3(-4f, -3, 0);
@@ -37,9 +38,16 @@ public class BoardState : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-		Cell foo = cells[0,0];
-		if (foo.item.rigidbody.IsSleeping()) {
-			Debug.Log("Snore");
+		if (!randomised) {
+			randomised = true;
+			for(int y = 0; y < cellCount.y; ++y) {
+				for(int x = 0; x < cellCount.x; ++x) {
+					Cell cell = cells[x,y];
+					BlockState state = cell.item.GetComponent<BlockState>();
+					state.RandomFlavour();
+					state.RandomColour();
+				}
+			}
 		}
 	}
 	
