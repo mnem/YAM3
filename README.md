@@ -6,6 +6,4 @@ Eventually, this will be a marginally bland match-three style game. As well as s
 
 ### Technologies and Tools
 
-- Unity3D 4
-- Cheetah 3D
-
+See: CREDITS.md
