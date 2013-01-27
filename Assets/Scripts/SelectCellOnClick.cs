@@ -26,7 +26,7 @@ public class SelectCellOnClick : MonoBehaviour {
 	}
 	
 	protected void ActionOnClick() {
-		_boardState.selectCell(gameObject);
+		_boardState.CellClicked(gameObject);
 	}
 	
 }

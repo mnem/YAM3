@@ -7,14 +7,12 @@ public class BoardState : MonoBehaviour {
 	public Vector2 cellCount;
 
 	private Cell[,] _cells;
-	private bool _randomised;
 	
-	private GameObject _selected;
+	private Cell _selected;
 	
 	// Use this for initialization
 	void Start () {
-		_randomised = false;
-		initialiseCells();
+		InitialiseCellStore();
 		
 		Vector3 origin = new Vector3(-4f, -3, 0);
 		Vector3 current = new Vector3(origin.x, origin.y, origin.z);
@@ -25,7 +23,7 @@ public class BoardState : MonoBehaviour {
 		for(int y = 0; y < cellCount.y; ++y) {
 			for(int x = 0; x < cellCount.x; ++x) {
 				GameObject display = (GameObject)Instantiate(template, current, Quaternion.identity);
-				Cell cell = new Cell() {item = display};
+				Cell cell = new Cell() {item = display, x = x, y = y};
 				_cells[x,y] = cell;
 				current.x += displayWidth + xGap;
 			}
@@ -40,42 +38,40 @@ public class BoardState : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-		if (!_randomised) {
-			_randomised = true;
-			for(int y = 0; y < cellCount.y; ++y) {
-				for(int x = 0; x < cellCount.x; ++x) {
-					Cell cell = _cells[x,y];
-					BlockState state = cell.item.GetComponent<BlockState>();
-					state.RandomFlavour();
-					state.RandomColour();
+	}
+	
+	public void CellClicked(GameObject cellGameObject) {
+		if (_selected != null) {
+			_selected.StopSelectedAnimation();	
+		}
+		
+		// Only select the cell if it's a different one
+		Cell cell = GetCell(cellGameObject);
+		if ( cell != _selected) {
+			_selected = cell;
+			
+			if (_selected != null) {
+				_selected.PlaySelectedAnimation();
+			}
+		} else {
+			// Just de-selecting
+			_selected = null;
+		} 
+	}
+	
+	private Cell GetCell(GameObject cell) {
+		for(int y = 0; y < cellCount.y; ++y) {
+			for(int x = 0; x < cellCount.x; ++x) {
+				if (_cells[x,y].item == cell) {
+					return _cells[x,y];
 				}
 			}
 		}
-	}
-	
-	public void cellClicked(GameObject cell) {
-		selectCell(_selected);
-	}
-
-	public void selectCell (GameObject cell)
-	{
-		deselectCell();
-		_selected = cell;
 		
-		if (_selected) {
-			_selected.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
-		}
-	}
-
-	public void deselectCell ()
-	{
-		if (_selected) {
-			_selected.transform.localScale = new Vector3(1f, 1f, 1f);
-			_selected = null;
-		}
+		return null;
 	}
 	
-	private void initialiseCells() {
+	private void InitialiseCellStore() {
 		_cells = new Cell[(int)cellCount.x, (int)cellCount.y];
 	}
 
@@ -83,22 +79,37 @@ public class BoardState : MonoBehaviour {
 	/// Cell. Contains all the information about a cell
 	/// </summary>/
 	private class Cell {
-		public enum Type {
-			Null,
-			Cube,
-			Cone,
-			Sphere
-		};
-		
-		public enum Flavour {
-			Null,
-			Red,
-			Green,
-			Blue
-		};
-		
-		public Type type = Type.Null;
-		public Flavour flavour = Flavour.Null;
+		public int x;
+		public int y;
 		public GameObject item;
+		
+		public void PlaySelectedAnimation() {
+			iTween.Stop(blockState.visualContainer);
+			iTween.ScaleTo(blockState.visualContainer, iTween.Hash(
+				"x", 1.4f,
+				"y", 0.6f,
+				"z", 1.4f,
+				"time", 0.25f,
+				"easetype", iTween.EaseType.easeInOutQuad,
+				"looptype", iTween.LoopType.pingPong
+			));
+		}
+		
+		public void StopSelectedAnimation() {
+			iTween.Stop(blockState.visualContainer);
+			iTween.ScaleTo(blockState.visualContainer, iTween.Hash(
+				"x", 1.0f,
+				"y", 1.0f,
+				"z", 1.0f,
+				"time", 0.15f,
+				"easetype", iTween.EaseType.easeOutQuad
+			));
+		}
+		
+		private BlockState blockState {
+			get {
+				return item.GetComponent<BlockState>();
+			}
+		}
 	}
 }
