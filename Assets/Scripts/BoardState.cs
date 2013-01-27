@@ -6,12 +6,14 @@ public class BoardState : MonoBehaviour {
 	public GameObject template;
 	public Vector2 cellCount;
 
-	private Cell[,] cells;
-	private bool randomised;
+	private Cell[,] _cells;
+	private bool _randomised;
+	
+	private GameObject _selected;
 	
 	// Use this for initialization
 	void Start () {
-		randomised = false;
+		_randomised = false;
 		initialiseCells();
 		
 		Vector3 origin = new Vector3(-4f, -3, 0);
@@ -24,7 +26,7 @@ public class BoardState : MonoBehaviour {
 			for(int x = 0; x < cellCount.x; ++x) {
 				GameObject display = (GameObject)Instantiate(template, current, Quaternion.identity);
 				Cell cell = new Cell() {item = display};
-				cells[x,y] = cell;
+				_cells[x,y] = cell;
 				current.x += displayWidth + xGap;
 			}
 			current.y += displayHeight;
@@ -38,11 +40,11 @@ public class BoardState : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
-		if (!randomised) {
-			randomised = true;
+		if (!_randomised) {
+			_randomised = true;
 			for(int y = 0; y < cellCount.y; ++y) {
 				for(int x = 0; x < cellCount.x; ++x) {
-					Cell cell = cells[x,y];
+					Cell cell = _cells[x,y];
 					BlockState state = cell.item.GetComponent<BlockState>();
 					state.RandomFlavour();
 					state.RandomColour();
@@ -51,8 +53,30 @@ public class BoardState : MonoBehaviour {
 		}
 	}
 	
+	public void cellClicked(GameObject cell) {
+		selectCell(_selected);
+	}
+
+	public void selectCell (GameObject cell)
+	{
+		deselectCell();
+		_selected = cell;
+		
+		if (_selected) {
+			_selected.transform.localScale = new Vector3(1.5f, 1.5f, 1.5f);
+		}
+	}
+
+	public void deselectCell ()
+	{
+		if (_selected) {
+			_selected.transform.localScale = new Vector3(1f, 1f, 1f);
+			_selected = null;
+		}
+	}
+	
 	private void initialiseCells() {
-		cells = new Cell[(int)cellCount.x, (int)cellCount.y];
+		_cells = new Cell[(int)cellCount.x, (int)cellCount.y];
 	}
 
 	/// <summary>
