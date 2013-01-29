@@ -154,10 +154,8 @@ public class BlockState : MonoBehaviour {
 			_visualContainer.transform.localPosition = new Vector3(0f, 0f, 0f);
 		}
 		
-		if (_visual != null) {
-			Destroy(_visual);
-			_visual = null;
-		}
+		GameObject old = _visual;
+		_visual = null;
 		
 		switch (flavour) {
 		case Flavour.Cone:
@@ -172,8 +170,16 @@ public class BlockState : MonoBehaviour {
 		}
 		
 		_visual.transform.parent = _visualContainer.transform;
+		if (old != null) {
+			_visual.transform.localScale = old.transform.localScale;
+		}
+		
+		if (old != null) {
+			Destroy(old);
+		}
 		
 		visualPivotPoint = VisualPivotPoint.ForceRefresh;
+		_currentColour = Colour.Null;
 		
 		_currentFlavour = flavour;
 	}
