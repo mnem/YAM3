@@ -93,10 +93,14 @@ public class BoardState : MonoBehaviour {
 		_cells = new Cell[(int)cellCount.x, (int)cellCount.y];
 	}
 
+	public void swapTweenFinished(Cell[] cells) {
+		cells[0].swapState(cells[1]);
+	}
+		
 	/// <summary>
 	/// Cell. Contains all the information about a cell
 	/// </summary>/
-	private class Cell {
+	public class Cell {
 		public int x;
 		public int y;
 		public GameObject item;
@@ -124,7 +128,7 @@ public class BoardState : MonoBehaviour {
 			));
 		}
 		
-		private void swapState(Cell other) {
+		public void swapState(Cell other) {
 			BlockState.Flavour tempFlavour = other.blockState.flavour;
 			BlockState.Colour tempColour = other.blockState.colour;
 			
@@ -136,7 +140,50 @@ public class BoardState : MonoBehaviour {
 		}
 
 		public void swapVertical(Cell cell) {
-			swapState(cell);
+			int direction = 1;
+			const float duration = 2.0f;
+			if (cell.y > y) {
+				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
+				blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
+			} else {
+				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
+				blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
+				direction = -1;
+			}
+			
+			iTween.RotateBy(blockState.visualContainer, iTween.Hash(
+				"x", 180.0f / 360.0f * direction,
+				"y", 0.0f,
+				"z", 0.0f,
+				"time", duration,
+				"easetype", iTween.EaseType.easeOutQuad
+			));
+			iTween.RotateBy(blockState.visual, iTween.Hash(
+				"x", 180.0f / 360.0f * -direction,
+				"y", 0.0f,
+				"z", 0.0f,
+				"time", duration,
+				"easetype", iTween.EaseType.easeOutQuad
+			));
+			
+			Cell[] cells = {this, cell};
+			iTween.RotateBy(cell.blockState.visualContainer, iTween.Hash(
+				"x", 180.0f / 360.0f * direction,
+				"y", 0.0f,
+				"z", 0.0f,
+				"time", duration,
+				"easetype", iTween.EaseType.easeOutQuad,
+				"oncomplete", "swapTweenFinished",
+				"oncompletetarget", GameObject.Find("GameCore"),
+				"oncompleteparams", cells
+			));
+			iTween.RotateBy(cell.blockState.visual, iTween.Hash(
+				"x", 180.0f / 360.0f * -direction,
+				"y", 0.0f,
+				"z", 0.0f,
+				"time", duration,
+				"easetype", iTween.EaseType.easeOutQuad
+			));
 		}
 
 		public void swapHorizontal(Cell cell) {

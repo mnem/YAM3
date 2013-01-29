@@ -100,10 +100,10 @@ public class BlockState : MonoBehaviour {
 			// By default it's centered, 0, 0, 0
 			break;
 		case VisualPivotPoint.LeftCentre:
-			pivot.x = -renderer.bounds.extents.x;
+			pivot.x = -renderer.bounds.extents.x + (1/16f); // Hack in the half the gap of the board
 			break;
 		case VisualPivotPoint.RightCentre:
-			pivot.x = renderer.bounds.extents.x;
+			pivot.x = renderer.bounds.extents.x + (1/16f); // Hack in the half the gap of the board
 			break;
 		case VisualPivotPoint.TopCentre:
 			pivot.y = renderer.bounds.extents.y;
