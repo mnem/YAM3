@@ -10,6 +10,8 @@ public class BoardState : MonoBehaviour {
 	
 	private Cell _selected;
 	
+	private bool _swapping = false;
+	
 	// Use this for initialization
 	void Start () {
 		InitialiseCellStore();
@@ -41,6 +43,8 @@ public class BoardState : MonoBehaviour {
 	}
 	
 	public void CellClicked(GameObject cellGameObject) {
+		if (_swapping) return;
+		
 		Cell existingSelection = _selected;
 		Cell cell = GetCell(cellGameObject);
 			
@@ -65,8 +69,10 @@ public class BoardState : MonoBehaviour {
 				int yDiff = aY - bY;
 				
 				if (aX == bX && (yDiff == -1 || yDiff == 1)) {
+					_swapping = true;
 					existingSelection.swapVertical(cell);
 				} else if (aY == bY && (xDiff == -1 || xDiff == 1)) {
+					_swapping = true;
 					existingSelection.swapHorizontal(cell);
 				} else {
 					// Too far, just select the new cell
@@ -94,7 +100,16 @@ public class BoardState : MonoBehaviour {
 	}
 
 	public void swapTweenFinished(Cell[] cells) {
-		cells[0].swapState(cells[1]);
+		Cell a = cells[0];
+		Cell b = cells[1];
+
+		a.swapState(b);
+		
+		a.resetRotationAndAnchor();
+		b.resetRotationAndAnchor();
+		
+		
+		_swapping = false;
 	}
 		
 	/// <summary>
@@ -129,19 +144,31 @@ public class BoardState : MonoBehaviour {
 		}
 		
 		public void swapState(Cell other) {
-			BlockState.Flavour tempFlavour = other.blockState.flavour;
-			BlockState.Colour tempColour = other.blockState.colour;
-			
-			other.blockState.flavour = blockState.flavour;			
-			other.blockState.colour = blockState.colour;	
-			
-			blockState.flavour = tempFlavour;
-			blockState.colour = tempColour;
+			blockState.swap(other.blockState);
+		}
+		
+		private Hashtable rotateVerticalHash(int direction) {
+			return iTween.Hash(
+				"x", 180.0f / 360.0f * direction,
+				"y", 0.0f,
+				"z", 0.0f,
+				"time", 0.5f,
+				"easetype", iTween.EaseType.easeOutQuad
+			);
+		}
+		
+		private Hashtable rotateHorizontalHash(int direction) {
+			return iTween.Hash(
+				"x", 0.0f,
+				"y", 180.0f / 360.0f * direction,
+				"z", 0.0f,
+				"time", 0.5f,
+				"easetype", iTween.EaseType.easeOutQuad
+			);
 		}
 
 		public void swapVertical(Cell cell) {
 			int direction = 1;
-			const float duration = 2.0f;
 			if (cell.y > y) {
 				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
 				blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
@@ -151,43 +178,46 @@ public class BoardState : MonoBehaviour {
 				direction = -1;
 			}
 			
-			iTween.RotateBy(blockState.visualContainer, iTween.Hash(
-				"x", 180.0f / 360.0f * direction,
-				"y", 0.0f,
-				"z", 0.0f,
-				"time", duration,
-				"easetype", iTween.EaseType.easeOutQuad
-			));
-			iTween.RotateBy(blockState.visual, iTween.Hash(
-				"x", 180.0f / 360.0f * -direction,
-				"y", 0.0f,
-				"z", 0.0f,
-				"time", duration,
-				"easetype", iTween.EaseType.easeOutQuad
-			));
+			iTween.RotateBy(blockState.visualContainer, rotateVerticalHash(direction));
+			iTween.RotateBy(blockState.visual, rotateVerticalHash(-direction));
 			
+			Hashtable rotateAndCallback = rotateVerticalHash(direction);
 			Cell[] cells = {this, cell};
-			iTween.RotateBy(cell.blockState.visualContainer, iTween.Hash(
-				"x", 180.0f / 360.0f * direction,
-				"y", 0.0f,
-				"z", 0.0f,
-				"time", duration,
-				"easetype", iTween.EaseType.easeOutQuad,
-				"oncomplete", "swapTweenFinished",
-				"oncompletetarget", GameObject.Find("GameCore"),
-				"oncompleteparams", cells
-			));
-			iTween.RotateBy(cell.blockState.visual, iTween.Hash(
-				"x", 180.0f / 360.0f * -direction,
-				"y", 0.0f,
-				"z", 0.0f,
-				"time", duration,
-				"easetype", iTween.EaseType.easeOutQuad
-			));
+			rotateAndCallback.Add("oncomplete", "swapTweenFinished");
+			rotateAndCallback.Add("oncompletetarget", GameObject.Find("GameCore"));
+			rotateAndCallback.Add("oncompleteparams", cells);
+			iTween.RotateBy(cell.blockState.visualContainer, rotateAndCallback);
+			iTween.RotateBy(cell.blockState.visual, rotateVerticalHash(-direction));
+		}
+		
+		public void resetRotationAndAnchor() {
+			Vector3 unrotated = new Vector3(0.0f, 0.0f, 0.0f);
+			blockState.visualContainer.transform.eulerAngles = unrotated;
+			blockState.visual.transform.eulerAngles = unrotated;
+			blockState.visualPivotPoint = BlockState.VisualPivotPoint.Centre;
 		}
 
 		public void swapHorizontal(Cell cell) {
-			swapState(cell);
+			int direction = 1;
+			if (cell.x > x) {
+				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.LeftCentre;
+				blockState.visualPivotPoint = BlockState.VisualPivotPoint.RightCentre;
+				direction = -1;
+			} else {
+				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.RightCentre;
+				blockState.visualPivotPoint = BlockState.VisualPivotPoint.LeftCentre;
+			}
+			
+			iTween.RotateBy(blockState.visualContainer, rotateHorizontalHash(direction));
+			iTween.RotateBy(blockState.visual, rotateHorizontalHash(-direction));
+			
+			Hashtable rotateAndCallback = rotateHorizontalHash(direction);
+			Cell[] cells = {this, cell};
+			rotateAndCallback.Add("oncomplete", "swapTweenFinished");
+			rotateAndCallback.Add("oncompletetarget", GameObject.Find("GameCore"));
+			rotateAndCallback.Add("oncompleteparams", cells);
+			iTween.RotateBy(cell.blockState.visualContainer, rotateAndCallback);
+			iTween.RotateBy(cell.blockState.visual, rotateHorizontalHash(-direction));
 		}
 		
 		private BlockState blockState {

@@ -100,7 +100,7 @@ public class BlockState : MonoBehaviour {
 			// By default it's centered, 0, 0, 0
 			break;
 		case VisualPivotPoint.LeftCentre:
-			pivot.x = -renderer.bounds.extents.x + (1/16f); // Hack in the half the gap of the board
+			pivot.x = -renderer.bounds.extents.x - (1/16f); // Hack in the half the gap of the board
 			break;
 		case VisualPivotPoint.RightCentre:
 			pivot.x = renderer.bounds.extents.x + (1/16f); // Hack in the half the gap of the board
@@ -120,7 +120,6 @@ public class BlockState : MonoBehaviour {
 		pivot.x *= -1;
 		pivot.y *= -1;
 		pivot.z *= -1;
-		if (flavour == Flavour.Cone) pivot.y += -0.45f;
 		_visual.transform.localPosition = pivot;
 		
 		_currentVisualPivotPoint = visualPivotPoint;
@@ -129,15 +128,20 @@ public class BlockState : MonoBehaviour {
 	private void UpdateVisualColour() {
 		if (_currentColour == colour) return;
 		
+		Renderer renderer = _visual.renderer;
+		if (renderer == null) {
+			renderer = _visual.GetComponentInChildren<Renderer>();
+		}
+		
 		switch (colour) {
 		case Colour.Blue:
-			_visual.renderer.material = _map.colourBlue;
+			renderer.material = _map.colourBlue;
 			break;
 		case Colour.Red:
-			_visual.renderer.material = _map.colourRed;
+			renderer.material = _map.colourRed;
 			break;
 		case Colour.Yellow:
-			_visual.renderer.material = _map.colourYellow;
+			renderer.material = _map.colourYellow;
 			break;
 		}
 		
@@ -182,6 +186,23 @@ public class BlockState : MonoBehaviour {
 		_currentColour = Colour.Null;
 		
 		_currentFlavour = flavour;
+	}
+
+	public void swap(BlockState other)
+	{
+		GameObject oldVisual = _visual;
+		Colour oldColour = colour;
+		Flavour oldFlavour = flavour;
+		
+		_visual = other._visual;
+		_visual.transform.parent = _visualContainer.transform;
+		_currentColour = colour = other.colour;
+		_currentFlavour = flavour = other.flavour;
+		
+		other._visual = oldVisual;
+		other._visual.transform.parent = other._visualContainer.transform;
+		other._currentColour = other.colour = oldColour;
+		other._currentFlavour = other.flavour = oldFlavour;
 	}
 
 	public GameObject visualContainer {
