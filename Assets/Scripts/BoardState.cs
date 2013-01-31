@@ -7,7 +7,7 @@ public class BoardState : MonoBehaviour {
 	public GameObject template;
 	public Vector2 cellCount;
 
-	private Cell[,] _cells;
+	private Cell[] _cellPool;
 	
 	private Cell _selected;
 	
@@ -16,23 +16,32 @@ public class BoardState : MonoBehaviour {
 	
 	// Use this for initialization
 	void Start () {
-		InitialiseCellStore();
-		
 		Vector3 origin = new Vector3(-4f, -3, 0);
 		Vector3 current = new Vector3(origin.x, origin.y, origin.z);
 		float displayWidth = template.renderer.bounds.size.x;
 		float displayHeight = template.renderer.bounds.size.y;
 		const float xGap = 1/8f;
 		
-		for(int y = 0; y < cellCount.y; ++y) {
-			for(int x = 0; x < cellCount.x; ++x) {
-				GameObject display = (GameObject)Instantiate(template, current, Quaternion.identity);
-				Cell cell = new Cell() {item = display, x = x, y = y};
-				_cells[x,y] = cell;
-				current.x += displayWidth + xGap;
+		
+		_cellPool = new Cell[(int)(cellCount.x * cellCount.y)];
+		int x = 0;
+		int y = 0;
+		for (int i = 0; i < _cellPool.Length; ++i) {
+			_cellPool[i] = new Cell() {
+				item = (GameObject)Instantiate(template, current, Quaternion.identity),
+				x = x,
+				y = y
+			};
+			
+			current.x += displayWidth + xGap;
+			
+			x = x + 1;
+			if (x >= cellCount.x) {
+				x = 0;
+				y = y + 1;
+				current.y += displayHeight;
+				current.x = origin.x;
 			}
-			current.y += displayHeight;
-			current.x = origin.x;
 		}
 	}
 	
@@ -85,20 +94,14 @@ public class BoardState : MonoBehaviour {
 		}
 	}
 	
-	private Cell GetCell(GameObject cell) {
-		for(int y = 0; y < cellCount.y; ++y) {
-			for(int x = 0; x < cellCount.x; ++x) {
-				if (_cells[x,y].item == cell) {
-					return _cells[x,y];
-				}
+	private Cell GetCell(GameObject go) {
+		foreach (Cell cell in _cellPool) {
+			if (cell.item == go) {
+				return cell;
 			}
 		}
 		
 		return null;
-	}
-	
-	private void InitialiseCellStore() {
-		_cells = new Cell[(int)cellCount.x, (int)cellCount.y];
 	}
 
 	public void swapTweenFinished(Cell[] cells) {
@@ -138,38 +141,50 @@ public class BoardState : MonoBehaviour {
 				a.unswapHorizontal(b);
 			}
 		} else {
-			int topY = (int)(cellCount.y - 1);
-			Debug.Log("topY: " + topY);
 			if (scoreA > 0) {
-				foreach (Cell dead in aMatches) {
-					for (int i = dead.y; i < topY; ++i) {
-						_cells[dead.x, i] = _cells[dead.x, i+1];
-						_cells[dead.x, i].y = i;
-					}
-					Destroy(dead.item);
-					//dead.y = topY;
-					//Vector3 temp = dead.item.transform.position;
-					//temp.y = 0.0f;
-					//dead.item.transform.position = temp;
-				}
+				RemoveBlocks(aMatches);
 			}
-			/*
 			if (scoreB > 0) {
-				foreach (Cell dead in aMatches) {
-					for (int i = dead.y + 1; i < topY; ++i) {
-						_cells[dead.x, i - 1] = _cells[dead.x, i];
-					}
-					Destroy(dead.item);
-					//dead.y = topY;
-					//Vector3 temp = dead.item.transform.position;
-					//temp.y = 0.0f;
-					//dead.item.transform.position = temp;
-				}
+				RemoveBlocks(bMatches);
 			}
-			*/
 		}
 		
 		_swapping = false;
+	}
+	
+	private void RemoveBlocks(List<Cell> blocks) {
+		int[] topY = {
+			(int)cellCount.y - 1, (int)cellCount.y - 1, (int)cellCount.y - 1, (int)cellCount.y - 1,
+			(int)cellCount.y - 1, (int)cellCount.y - 1, (int)cellCount.y - 1, (int)cellCount.y - 1
+		};
+		
+		// Drop all the cells to drop
+		List<Cell> fallers = new List<Cell>();
+		foreach (Cell dead in blocks) {
+			topY[dead.x] = topY[dead.x] - 1;
+			for (int i = dead.y + 1; i < cellCount.y; ++i) {
+				fallers.Add(GetCellAt(dead.x, i));
+			}
+		}
+		
+		foreach (Cell fallGuy in fallers) {
+			if (fallGuy != null){
+				fallGuy.y = fallGuy.y - 1;
+			}
+		}
+		
+		// Reset all the matchers
+		float displayHeight = template.renderer.bounds.size.y;
+		foreach (Cell dead in blocks) {
+			dead.y = topY[dead.x] + 1;
+			topY[dead.x] = topY[dead.x] + 1;
+			
+			Vector3 loc = dead.item.transform.position;
+			loc.y = displayHeight * dead.y;
+			dead.item.transform.position = loc;
+			dead.blockState.RandomColour();
+			dead.blockState.RandomFlavour();
+		}
 	}
 
 	public float CalculateScore (List<Cell> matches)
@@ -197,10 +212,20 @@ public class BoardState : MonoBehaviour {
 			return;
 		}
 		
-		if (a.y > 0) WalkMatches(_cells[a.x, a.y - 1], matches);
-		if (a.y < (cellCount.y - 1)) WalkMatches(_cells[a.x, a.y + 1], matches);
-		if (a.x > 0) WalkMatches(_cells[a.x - 1, a.y], matches);
-		if (a.x < (cellCount.x - 1)) WalkMatches(_cells[a.x + 1, a.y], matches);
+		if (a.y > 0) WalkMatches(GetCellAt(a.x, a.y - 1), matches);
+		if (a.y < (cellCount.y - 1)) WalkMatches(GetCellAt(a.x, a.y + 1), matches);
+		if (a.x > 0) WalkMatches(GetCellAt(a.x - 1, a.y), matches);
+		if (a.x < (cellCount.x - 1)) WalkMatches(GetCellAt(a.x + 1, a.y), matches);
+	}
+	
+	private Cell GetCellAt(int x, int y) {
+		foreach (Cell cell in _cellPool) {
+			if (cell.x == x && cell.y == y) {
+				return cell;
+			}
+		}
+		
+		return null;
 	}
 		
 	/// <summary>
