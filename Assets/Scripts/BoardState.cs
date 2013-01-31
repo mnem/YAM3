@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
-
+using System.Collections.Generic;
+	
 public class BoardState : MonoBehaviour {
 	
 	public GameObject template;
@@ -11,6 +12,7 @@ public class BoardState : MonoBehaviour {
 	private Cell _selected;
 	
 	private bool _swapping = false;
+	private bool _cancellingSwap = false;
 	
 	// Use this for initialization
 	void Start () {
@@ -43,7 +45,7 @@ public class BoardState : MonoBehaviour {
 	}
 	
 	public void CellClicked(GameObject cellGameObject) {
-		if (_swapping) return;
+		if (_swapping || _cancellingSwap) return;
 		
 		Cell existingSelection = _selected;
 		Cell cell = GetCell(cellGameObject);
@@ -102,24 +104,142 @@ public class BoardState : MonoBehaviour {
 	public void swapTweenFinished(Cell[] cells) {
 		Cell a = cells[0];
 		Cell b = cells[1];
-
-		a.swapState(b);
 		
+		a.swapState(b);
 		a.resetRotationAndAnchor();
 		b.resetRotationAndAnchor();
 		
+		// If it was a cancelling move, we stop
+		// after swapping back
+		if (_cancellingSwap) {
+			_cancellingSwap = false;
+			return;
+		}
+		
+		List<Cell> aMatches = new List<Cell>();
+		WalkMatches(a, aMatches);
+		
+		// If a and b match, getting a's matches will
+		// already include b and co.
+		List<Cell> bMatches = new List<Cell>();
+		if (!a.blockState.Match(b.blockState)) {
+			//WalkMatches(b, bMatches);
+		}
+		
+		float scoreA = CalculateScore(aMatches);
+		float scoreB = CalculateScore(bMatches);
+		
+		if (scoreA == 0 && scoreB == 0) {
+			// Spin them back
+			_cancellingSwap = true;
+			if (a.x == b.x) {
+				a.unswapVertical(b);
+			} else {
+				a.unswapHorizontal(b);
+			}
+		} else {
+			int topY = (int)(cellCount.y - 1);
+			Debug.Log("topY: " + topY);
+			if (scoreA > 0) {
+				foreach (Cell dead in aMatches) {
+					for (int i = dead.y; i < topY; ++i) {
+						_cells[dead.x, i] = _cells[dead.x, i+1];
+						_cells[dead.x, i].y = i;
+					}
+					Destroy(dead.item);
+					//dead.y = topY;
+					//Vector3 temp = dead.item.transform.position;
+					//temp.y = 0.0f;
+					//dead.item.transform.position = temp;
+				}
+			}
+			/*
+			if (scoreB > 0) {
+				foreach (Cell dead in aMatches) {
+					for (int i = dead.y + 1; i < topY; ++i) {
+						_cells[dead.x, i - 1] = _cells[dead.x, i];
+					}
+					Destroy(dead.item);
+					//dead.y = topY;
+					//Vector3 temp = dead.item.transform.position;
+					//temp.y = 0.0f;
+					//dead.item.transform.position = temp;
+				}
+			}
+			*/
+		}
 		
 		_swapping = false;
+	}
+
+	public float CalculateScore (List<Cell> matches)
+	{
+		if (matches == null || matches.Count < 3) {
+			return 0f;
+		} else {
+			// TODO: Implement bonus for colour and flavour matches
+			return matches.Count * 100f;
+		}
+	}
+
+	public void WalkMatches(Cell a, List<Cell> matches)
+	{
+		if (a == null) {
+			return;
+		} else if (matches.Contains(a)) {
+			// Already processed
+			return;
+		} else if (matches.Count == 0 || matches[0].blockState.Match(a.blockState)) {
+			// Baddabing
+			matches.Add(a);
+		} else {
+			// No a match
+			return;
+		}
+		
+		if (a.y > 0) WalkMatches(_cells[a.x, a.y - 1], matches);
+		if (a.y < (cellCount.y - 1)) WalkMatches(_cells[a.x, a.y + 1], matches);
+		if (a.x > 0) WalkMatches(_cells[a.x - 1, a.y], matches);
+		if (a.x < (cellCount.x - 1)) WalkMatches(_cells[a.x + 1, a.y], matches);
 	}
 		
 	/// <summary>
 	/// Cell. Contains all the information about a cell
 	/// </summary>/
 	public class Cell {
-		public int x;
-		public int y;
-		public GameObject item;
+		private int _x;
+		private int _y;
+		private GameObject _item;
 		
+		public GameObject item {
+			get {
+				return this._item;
+			}
+			set {
+				_item = value;
+				UpdateName();
+			}
+		}
+
+		public int x {
+			get {
+				return this._x;
+			}
+			set {
+				_x = value;
+				UpdateName();
+			}
+		}
+
+		public int y {
+			get {
+				return this._y;
+			}
+			set {
+				_y = value;
+				UpdateName();
+			}
+		}		
 		public void PlaySelectedAnimation() {
 			iTween.Stop(blockState.visualContainer);
 			iTween.ScaleTo(blockState.visualContainer, iTween.Hash(
@@ -130,6 +250,13 @@ public class BoardState : MonoBehaviour {
 				"easetype", iTween.EaseType.easeInOutQuad,
 				"looptype", iTween.LoopType.pingPong
 			));
+		}
+
+		public void UpdateName()
+		{
+			if (_item != null) {
+				_item.name = _x + ", " + y;
+			}
 		}
 		
 		public void StopSelectedAnimation() {
@@ -144,7 +271,7 @@ public class BoardState : MonoBehaviour {
 		}
 		
 		public void swapState(Cell other) {
-			blockState.swap(other.blockState);
+			blockState.Swap(other.blockState);
 		}
 		
 		private Hashtable rotateVerticalHash(int direction) {
@@ -167,15 +294,14 @@ public class BoardState : MonoBehaviour {
 			);
 		}
 
-		public void swapVertical(Cell cell) {
-			int direction = 1;
+		private void swapVertical(Cell cell, int direction) {
 			if (cell.y > y) {
 				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
 				blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
 			} else {
 				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
 				blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
-				direction = -1;
+				direction *= -1;
 			}
 			
 			iTween.RotateBy(blockState.visualContainer, rotateVerticalHash(direction));
@@ -190,19 +316,19 @@ public class BoardState : MonoBehaviour {
 			iTween.RotateBy(cell.blockState.visual, rotateVerticalHash(-direction));
 		}
 		
-		public void resetRotationAndAnchor() {
-			Vector3 unrotated = new Vector3(0.0f, 0.0f, 0.0f);
-			blockState.visualContainer.transform.eulerAngles = unrotated;
-			blockState.visual.transform.eulerAngles = unrotated;
-			blockState.visualPivotPoint = BlockState.VisualPivotPoint.Centre;
+		public void swapVertical(Cell cell) {
+			swapVertical(cell, 1);
 		}
-
-		public void swapHorizontal(Cell cell) {
-			int direction = 1;
+		
+		public void unswapVertical(Cell cell) {
+			swapVertical(cell, -1);
+		}
+		
+		public void swapHorizontal(Cell cell, int direction) {
 			if (cell.x > x) {
 				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.LeftCentre;
 				blockState.visualPivotPoint = BlockState.VisualPivotPoint.RightCentre;
-				direction = -1;
+				direction *= -1;
 			} else {
 				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.RightCentre;
 				blockState.visualPivotPoint = BlockState.VisualPivotPoint.LeftCentre;
@@ -220,7 +346,23 @@ public class BoardState : MonoBehaviour {
 			iTween.RotateBy(cell.blockState.visual, rotateHorizontalHash(-direction));
 		}
 		
-		private BlockState blockState {
+		public void swapHorizontal(Cell cell) {
+			swapHorizontal(cell, 1);
+		}
+		
+		public void unswapHorizontal(Cell cell) {
+			swapHorizontal(cell, -1);
+		}
+
+		public void resetRotationAndAnchor() {
+			Vector3 unrotated = new Vector3(0.0f, 0.0f, 0.0f);
+			blockState.visualContainer.transform.eulerAngles = unrotated;
+			blockState.visual.transform.eulerAngles = unrotated;
+			blockState.visualPivotPoint = BlockState.VisualPivotPoint.Centre;
+		}
+
+		
+		public BlockState blockState {
 			get {
 				return item.GetComponent<BlockState>();
 			}

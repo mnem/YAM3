@@ -49,7 +49,7 @@ public class BlockState : MonoBehaviour {
 	}
 	
 	// Update is called once per frame
-	void Update () {
+	void LateUpdate () {
 		UpdateVisualMesh();
 		UpdatePivotPoint();
 		UpdateVisualColour();
@@ -128,10 +128,7 @@ public class BlockState : MonoBehaviour {
 	private void UpdateVisualColour() {
 		if (_currentColour == colour) return;
 		
-		Renderer renderer = _visual.renderer;
-		if (renderer == null) {
-			renderer = _visual.GetComponentInChildren<Renderer>();
-		}
+		Renderer renderer = _item.GetComponentInChildren<Renderer>();
 		
 		switch (colour) {
 		case Colour.Blue:
@@ -158,29 +155,29 @@ public class BlockState : MonoBehaviour {
 			_visualContainer.transform.localPosition = new Vector3(0f, 0f, 0f);
 		}
 		
-		GameObject old = _visual;
-		_visual = null;
+		if (_visual == null) {
+			// Create the container for the visuals
+			_visual = new GameObject();
+			_visual.transform.parent = _visualContainer.transform;
+			_visual.transform.localPosition = new Vector3(0f, 0f, 0f);
+		}
+		
+		if (_item) Destroy(_item);
 		
 		switch (flavour) {
 		case Flavour.Cone:
-			_visual = (GameObject)Instantiate(_map.flavourCone);
+			_item = (GameObject)Instantiate(_map.flavourCone);
 			break;
 		case Flavour.Cube:
-			_visual = (GameObject)Instantiate(_map.flavourCube);
+			_item = (GameObject)Instantiate(_map.flavourCube);
 			break;
 		case Flavour.Sphere:
-			_visual = (GameObject)Instantiate(_map.flavourSphere);
+			_item = (GameObject)Instantiate(_map.flavourSphere);
 			break;
 		}
-		
-		_visual.transform.parent = _visualContainer.transform;
-		if (old != null) {
-			_visual.transform.localScale = old.transform.localScale;
-		}
-		
-		if (old != null) {
-			Destroy(old);
-		}
+
+		_item.transform.parent = _visual.transform;
+		_item.transform.localPosition = new Vector3(0f, 0f, 0f);
 		
 		visualPivotPoint = VisualPivotPoint.ForceRefresh;
 		_currentColour = Colour.Null;
@@ -188,21 +185,23 @@ public class BlockState : MonoBehaviour {
 		_currentFlavour = flavour;
 	}
 
-	public void swap(BlockState other)
+	public void Swap(BlockState other)
 	{
-		GameObject oldVisual = _visual;
-		Colour oldColour = colour;
 		Flavour oldFlavour = flavour;
+		flavour = other.flavour;
+		other.flavour = oldFlavour;
 		
-		_visual = other._visual;
-		_visual.transform.parent = _visualContainer.transform;
-		_currentColour = colour = other.colour;
-		_currentFlavour = flavour = other.flavour;
-		
-		other._visual = oldVisual;
-		other._visual.transform.parent = other._visualContainer.transform;
-		other._currentColour = other.colour = oldColour;
-		other._currentFlavour = other.flavour = oldFlavour;
+		Colour oldColour = colour;
+		colour = other.colour;
+		other.colour = oldColour;
+	}
+	
+	public bool Match(BlockState other) {
+		return flavour == other.flavour;
+	}
+	
+	public bool ExactMatch(BlockState other) {
+		return flavour == other.flavour && colour == other.colour;
 	}
 
 	public GameObject visualContainer {
@@ -219,5 +218,6 @@ public class BlockState : MonoBehaviour {
 
 	private GameObject _visualContainer;
 	private GameObject _visual;
+	private GameObject _item;
 	private BlockTypeVisualMap _map;
 }
