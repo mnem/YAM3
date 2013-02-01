@@ -19,7 +19,7 @@ public class BoardState : MonoBehaviour {
 		Vector3 origin = new Vector3(-4f, -3, 0);
 		Vector3 current = new Vector3(origin.x, origin.y, origin.z);
 		float displayWidth = template.renderer.bounds.size.x;
-		float displayHeight = template.renderer.bounds.size.y;
+		float displayHeight = template.renderer.bounds.size.y + 0.4f;
 		const float xGap = 1/8f;
 		
 		
@@ -126,7 +126,7 @@ public class BoardState : MonoBehaviour {
 		// already include b and co.
 		List<Cell> bMatches = new List<Cell>();
 		if (!a.blockState.Match(b.blockState)) {
-			//WalkMatches(b, bMatches);
+			WalkMatches(b, bMatches);
 		}
 		
 		float scoreA = CalculateScore(aMatches);
@@ -174,7 +174,7 @@ public class BoardState : MonoBehaviour {
 		}
 		
 		// Reset all the matchers
-		float displayHeight = template.renderer.bounds.size.y;
+		float displayHeight = template.renderer.bounds.size.y + 0.5f;
 		foreach (Cell dead in blocks) {
 			dead.y = topY[dead.x] + 1;
 			topY[dead.x] = topY[dead.x] + 1;
@@ -235,6 +235,7 @@ public class BoardState : MonoBehaviour {
 		private int _x;
 		private int _y;
 		private GameObject _item;
+		private GameObject _text;
 		
 		public GameObject item {
 			get {
@@ -242,6 +243,12 @@ public class BoardState : MonoBehaviour {
 			}
 			set {
 				_item = value;
+				
+				if (_text == null) {
+					_text = (GameObject)Instantiate(GameObject.Find("GameCore").GetComponent<DebugMisc>().labelTemplate, new Vector3(0f,0f,0f), Quaternion.identity);
+				}
+				_text.GetComponent<ObjectLabel>().target = _item.transform;
+
 				UpdateName();
 			}
 		}
@@ -281,6 +288,7 @@ public class BoardState : MonoBehaviour {
 		{
 			if (_item != null) {
 				_item.name = _x + ", " + y;
+				_text.GetComponent<GUIText>().text = _item.name;
 			}
 		}
 		
