@@ -1,6 +1,7 @@
 using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using YAM3;
 	
 public class BoardState : MonoBehaviour {
 	
@@ -13,6 +14,8 @@ public class BoardState : MonoBehaviour {
 	
 	private bool _swapping = false;
 	private bool _cancellingSwap = false;
+	private bool _cellsAreFalling = true;
+	private double _gameScore = 0;
 	
 	// Use this for initialization
 	void Start () {
@@ -27,11 +30,12 @@ public class BoardState : MonoBehaviour {
 		int x = 0;
 		int y = 0;
 		for (int i = 0; i < _cellPool.Length; ++i) {
-			_cellPool[i] = new Cell() {
+			Cell cell = new Cell() {
 				item = (GameObject)Instantiate(template, current, Quaternion.identity),
 				x = x,
 				y = y
 			};
+			_cellPool[i] = cell;
 			
 			current.x += displayWidth + xGap;
 			
@@ -43,6 +47,24 @@ public class BoardState : MonoBehaviour {
 				current.x = origin.x;
 			}
 		}
+		
+		DematchifyBoard();
+	}
+	
+	private void DematchifyBoard() {
+		bool hadMatch = true;
+		int loopCount = 0;
+		const int maxDematchifyAttempts = 20;
+		while (hadMatch && loopCount < maxDematchifyAttempts) {
+			loopCount = loopCount + 1;
+			hadMatch = false;
+			foreach (Cell cell in _cellPool) {
+				if (CheckForMatches(cell)) {
+					hadMatch = true;
+					cell.blockVisualState.state.NextFlavour();
+				}
+			}
+		}
 	}
 	
 	void Reset() {
@@ -51,10 +73,27 @@ public class BoardState : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
+		if (_cellsAreFalling) {
+			foreach (Cell toCheck in _cellPool) {
+				if (!toCheck.item.GetComponent<Rigidbody>().IsSleeping()) {
+					Debug.Log ("Waiting for things to settle before checking matches");					
+					return;
+				}
+			}
+			
+			// Everthing has stopped moving
+			_cellsAreFalling = false;
+			
+			foreach (Cell toCheck in _cellPool) {
+				AddToScore(ScoreMatchesAndRemove(toCheck));
+			}
+		}
 	}
 	
 	public void CellClicked(GameObject cellGameObject) {
-		if (_swapping || _cancellingSwap) return;
+		if (_swapping 
+			|| _cancellingSwap 
+			|| _cellsAreFalling) return;
 		
 		Cell existingSelection = _selected;
 		Cell cell = GetCell(cellGameObject);
@@ -96,7 +135,7 @@ public class BoardState : MonoBehaviour {
 	
 	private Cell GetCell(GameObject go) {
 		foreach (Cell cell in _cellPool) {
-			if (cell.item == go) {
+			if (cell != null && cell.item == go) {
 				return cell;
 			}
 		}
@@ -119,20 +158,13 @@ public class BoardState : MonoBehaviour {
 			return;
 		}
 		
-		List<Cell> aMatches = new List<Cell>();
-		WalkMatches(a, aMatches);
+		// Regardless of scoring, we've ended the swap
+		_swapping = false;
 		
-		// If a and b match, getting a's matches will
-		// already include b and co.
-		List<Cell> bMatches = new List<Cell>();
-		if (!a.blockState.Match(b.blockState)) {
-			WalkMatches(b, bMatches);
-		}
+		double score = ScoreMatchesAndRemove(a);
+		score += ScoreMatchesAndRemove(b);
 		
-		float scoreA = CalculateScore(aMatches);
-		float scoreB = CalculateScore(bMatches);
-		
-		if (scoreA == 0 && scoreB == 0) {
+		if (score == 0) {
 			// Spin them back
 			_cancellingSwap = true;
 			if (a.x == b.x) {
@@ -141,15 +173,33 @@ public class BoardState : MonoBehaviour {
 				a.unswapHorizontal(b);
 			}
 		} else {
-			if (scoreA > 0) {
-				RemoveBlocks(aMatches);
-			}
-			if (scoreB > 0) {
-				RemoveBlocks(bMatches);
-			}
+			AddToScore(score);
+		}
+	}
+
+	public void AddToScore (double score)
+	{
+		_gameScore += score;
+		Debug.Log("Score now " + _gameScore);
+	}
+	
+	private bool CheckForMatches(Cell cell) {
+		List<Cell> matches = new List<Cell>();
+		WalkMatches(cell, matches);
+		return CalculateScore(matches) > 0;
+	}
+	
+	private double ScoreMatchesAndRemove(Cell cell) {
+		List<Cell> matches = new List<Cell>();
+		WalkMatches(cell, matches);
+		double score = CalculateScore(matches);
+
+		if (score > 0) {
+			RemoveBlocks(matches);
+			_cellsAreFalling = true;
 		}
 		
-		_swapping = false;
+		return score;
 	}
 	
 	private void RemoveBlocks(List<Cell> blocks) {
@@ -161,9 +211,12 @@ public class BoardState : MonoBehaviour {
 		// Drop all the cells to drop
 		List<Cell> fallers = new List<Cell>();
 		foreach (Cell dead in blocks) {
+			dead.blockVisualState.state.flavour = BlockState.Flavour.Null;
 			topY[dead.x] = topY[dead.x] - 1;
 			for (int i = dead.y + 1; i < cellCount.y; ++i) {
-				fallers.Add(GetCellAt(dead.x, i));
+				Cell faller = GetCellAt(dead.x, i);
+				faller.item.GetComponent<Rigidbody>().WakeUp();
+				fallers.Add(faller);
 			}
 		}
 		
@@ -182,29 +235,44 @@ public class BoardState : MonoBehaviour {
 			Vector3 loc = dead.item.transform.position;
 			loc.y = displayHeight * dead.y;
 			dead.item.transform.position = loc;
-			dead.blockState.RandomColour();
-			dead.blockState.RandomFlavour();
+			dead.blockVisualState.state.RandomColour();
+			SafeFlavour(dead);
+			dead.item.GetComponent<Rigidbody>().WakeUp();
 		}
 	}
 
-	public float CalculateScore (List<Cell> matches)
+	void SafeFlavour (Cell dead)
+	{
+		int attempts = 0;
+		dead.blockVisualState.state.RandomFlavour();
+		while (attempts < 5 && CheckForMatches(dead)) {
+			dead.blockVisualState.state.NextFlavour();
+			attempts = attempts + 1;
+		}
+		
+		if (attempts == 5) {
+			Debug.Log("Blerp");
+		}
+	}
+
+	public double CalculateScore (List<Cell> matches)
 	{
 		if (matches == null || matches.Count < 3) {
-			return 0f;
+			return 0;
 		} else {
 			// TODO: Implement bonus for colour and flavour matches
-			return matches.Count * 100f;
+			return matches.Count * 100;
 		}
 	}
 
 	public void WalkMatches(Cell a, List<Cell> matches)
 	{
-		if (a == null) {
+		if (a == null || a.blockVisualState.state.flavour == BlockState.Flavour.Null) {
 			return;
 		} else if (matches.Contains(a)) {
 			// Already processed
 			return;
-		} else if (matches.Count == 0 || matches[0].blockState.Match(a.blockState)) {
+		} else if (matches.Count == 0 || matches[0].blockVisualState.Match(a.blockVisualState)) {
 			// Baddabing
 			matches.Add(a);
 		} else {
@@ -220,7 +288,7 @@ public class BoardState : MonoBehaviour {
 	
 	private Cell GetCellAt(int x, int y) {
 		foreach (Cell cell in _cellPool) {
-			if (cell.x == x && cell.y == y) {
+			if (cell != null && cell.x == x && cell.y == y) {
 				return cell;
 			}
 		}
@@ -234,6 +302,7 @@ public class BoardState : MonoBehaviour {
 	public class Cell {
 		private int _x;
 		private int _y;
+		private string _debugText = "";
 		private GameObject _item;
 		private GameObject _text;
 		
@@ -249,6 +318,16 @@ public class BoardState : MonoBehaviour {
 				}
 				_text.GetComponent<ObjectLabel>().target = _item.transform;
 
+				UpdateName();
+			}
+		}
+
+		public string debugText {
+			get {
+				return this.debugText;
+			}
+			set {
+				debugText = value;
 				UpdateName();
 			}
 		}
@@ -273,8 +352,8 @@ public class BoardState : MonoBehaviour {
 			}
 		}		
 		public void PlaySelectedAnimation() {
-			iTween.Stop(blockState.visualContainer);
-			iTween.ScaleTo(blockState.visualContainer, iTween.Hash(
+			iTween.Stop(blockVisualState.visualContainer);
+			iTween.ScaleTo(blockVisualState.visualContainer, iTween.Hash(
 				"x", 1.4f,
 				"y", 0.6f,
 				"z", 1.4f,
@@ -287,14 +366,14 @@ public class BoardState : MonoBehaviour {
 		public void UpdateName()
 		{
 			if (_item != null) {
-				_item.name = _x + ", " + y;
+				_item.name = _x + ", " + y + _debugText;
 				_text.GetComponent<GUIText>().text = _item.name;
 			}
 		}
 		
 		public void StopSelectedAnimation() {
-			iTween.Stop(blockState.visualContainer);
-			iTween.ScaleTo(blockState.visualContainer, iTween.Hash(
+			iTween.Stop(blockVisualState.visualContainer);
+			iTween.ScaleTo(blockVisualState.visualContainer, iTween.Hash(
 				"x", 1.0f,
 				"y", 1.0f,
 				"z", 1.0f,
@@ -304,7 +383,7 @@ public class BoardState : MonoBehaviour {
 		}
 		
 		public void swapState(Cell other) {
-			blockState.Swap(other.blockState);
+			blockVisualState.Swap(other.blockVisualState);
 		}
 		
 		private Hashtable rotateVerticalHash(int direction) {
@@ -329,24 +408,24 @@ public class BoardState : MonoBehaviour {
 
 		private void swapVertical(Cell cell, int direction) {
 			if (cell.y > y) {
-				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
-				blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
+				cell.blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.BottomCentre;
+				blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.TopCentre;
 			} else {
-				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.TopCentre;
-				blockState.visualPivotPoint = BlockState.VisualPivotPoint.BottomCentre;
+				cell.blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.TopCentre;
+				blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.BottomCentre;
 				direction *= -1;
 			}
 			
-			iTween.RotateBy(blockState.visualContainer, rotateVerticalHash(direction));
-			iTween.RotateBy(blockState.visual, rotateVerticalHash(-direction));
+			iTween.RotateBy(blockVisualState.visualContainer, rotateVerticalHash(direction));
+			iTween.RotateBy(blockVisualState.visual, rotateVerticalHash(-direction));
 			
 			Hashtable rotateAndCallback = rotateVerticalHash(direction);
 			Cell[] cells = {this, cell};
 			rotateAndCallback.Add("oncomplete", "swapTweenFinished");
 			rotateAndCallback.Add("oncompletetarget", GameObject.Find("GameCore"));
 			rotateAndCallback.Add("oncompleteparams", cells);
-			iTween.RotateBy(cell.blockState.visualContainer, rotateAndCallback);
-			iTween.RotateBy(cell.blockState.visual, rotateVerticalHash(-direction));
+			iTween.RotateBy(cell.blockVisualState.visualContainer, rotateAndCallback);
+			iTween.RotateBy(cell.blockVisualState.visual, rotateVerticalHash(-direction));
 		}
 		
 		public void swapVertical(Cell cell) {
@@ -359,24 +438,24 @@ public class BoardState : MonoBehaviour {
 		
 		public void swapHorizontal(Cell cell, int direction) {
 			if (cell.x > x) {
-				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.LeftCentre;
-				blockState.visualPivotPoint = BlockState.VisualPivotPoint.RightCentre;
+				cell.blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.LeftCentre;
+				blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.RightCentre;
 				direction *= -1;
 			} else {
-				cell.blockState.visualPivotPoint = BlockState.VisualPivotPoint.RightCentre;
-				blockState.visualPivotPoint = BlockState.VisualPivotPoint.LeftCentre;
+				cell.blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.RightCentre;
+				blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.LeftCentre;
 			}
 			
-			iTween.RotateBy(blockState.visualContainer, rotateHorizontalHash(direction));
-			iTween.RotateBy(blockState.visual, rotateHorizontalHash(-direction));
+			iTween.RotateBy(blockVisualState.visualContainer, rotateHorizontalHash(direction));
+			iTween.RotateBy(blockVisualState.visual, rotateHorizontalHash(-direction));
 			
 			Hashtable rotateAndCallback = rotateHorizontalHash(direction);
 			Cell[] cells = {this, cell};
 			rotateAndCallback.Add("oncomplete", "swapTweenFinished");
 			rotateAndCallback.Add("oncompletetarget", GameObject.Find("GameCore"));
 			rotateAndCallback.Add("oncompleteparams", cells);
-			iTween.RotateBy(cell.blockState.visualContainer, rotateAndCallback);
-			iTween.RotateBy(cell.blockState.visual, rotateHorizontalHash(-direction));
+			iTween.RotateBy(cell.blockVisualState.visualContainer, rotateAndCallback);
+			iTween.RotateBy(cell.blockVisualState.visual, rotateHorizontalHash(-direction));
 		}
 		
 		public void swapHorizontal(Cell cell) {
@@ -389,15 +468,15 @@ public class BoardState : MonoBehaviour {
 
 		public void resetRotationAndAnchor() {
 			Vector3 unrotated = new Vector3(0.0f, 0.0f, 0.0f);
-			blockState.visualContainer.transform.eulerAngles = unrotated;
-			blockState.visual.transform.eulerAngles = unrotated;
-			blockState.visualPivotPoint = BlockState.VisualPivotPoint.Centre;
+			blockVisualState.visualContainer.transform.eulerAngles = unrotated;
+			blockVisualState.visual.transform.eulerAngles = unrotated;
+			blockVisualState.visualPivotPoint = BlockVisualState.VisualPivotPoint.Centre;
 		}
 
 		
-		public BlockState blockState {
+		public BlockVisualState blockVisualState {
 			get {
-				return item.GetComponent<BlockState>();
+				return item.GetComponent<BlockVisualState>();
 			}
 		}
 	}
