@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using YAM3;
@@ -76,7 +77,6 @@ public class BoardState : MonoBehaviour {
 		if (_cellsAreFalling) {
 			foreach (Cell toCheck in _cellPool) {
 				if (!toCheck.item.GetComponent<Rigidbody>().IsSleeping()) {
-					Debug.Log ("Waiting for things to settle before checking matches");					
 					return;
 				}
 			}
@@ -84,9 +84,56 @@ public class BoardState : MonoBehaviour {
 			// Everthing has stopped moving
 			_cellsAreFalling = false;
 			
+			FixupIndexes();
+			
 			foreach (Cell toCheck in _cellPool) {
 				AddToScore(ScoreMatchesAndRemove(toCheck));
 			}
+		}
+	}
+
+	void FixupIndexes ()
+	{
+		SortedDictionary<float,List<Cell>> columns = new SortedDictionary<float, List<Cell>>();
+		foreach (Cell cell in _cellPool) {
+			if (!columns.ContainsKey(cell.x)){
+				columns[cell.x] = new List<Cell>();
+			}
+			
+			columns[cell.x].Add(cell);
+		}
+		
+		if (columns.Keys.Count != cellCount.x) {
+			throw new Exception("Um, wrong number of columns");
+		}
+		
+		int x = 0;
+		foreach (KeyValuePair<float,List<Cell>> column in columns) {
+			if (column.Value.Count != cellCount.x) {
+				throw new Exception("Um, wrong number of rows in column");
+			}
+			
+			column.Value.Sort(SortYAscending);
+			int y = 0;
+			foreach (Cell cell in column.Value) {
+				if (cell.x != x || cell.y != y) {
+					Debug.Log("Fixing " + cell.x + ", " + cell.y + " -> " + x + ", " + y);
+				}
+				cell.x = x;
+				cell.y = y;
+				
+				y = y + 1;
+			}
+			
+			x = x + 1;
+		}
+	}
+	
+	private static int SortYAscending(Cell a, Cell b) {
+		if (a.item.transform.position.y < b.item.transform.position.y) {
+			return -1;
+		} else {
+			return 1;
 		}
 	}
 	
@@ -161,8 +208,11 @@ public class BoardState : MonoBehaviour {
 		// Regardless of scoring, we've ended the swap
 		_swapping = false;
 		
-		double score = ScoreMatchesAndRemove(a);
-		score += ScoreMatchesAndRemove(b);
+		double score = 0;
+		if (a.blockVisualState.state.flavour != b.blockVisualState.state.flavour) {
+			score = ScoreMatchesAndRemove(a);
+			score += ScoreMatchesAndRemove(b);
+		}
 		
 		if (score == 0) {
 			// Spin them back
@@ -179,8 +229,10 @@ public class BoardState : MonoBehaviour {
 
 	public void AddToScore (double score)
 	{
-		_gameScore += score;
-		Debug.Log("Score now " + _gameScore);
+		if (score > 0 ) {
+			_gameScore += score;
+			Debug.Log("Score now " + _gameScore);
+		}
 	}
 	
 	private bool CheckForMatches(Cell cell) {
